@@ -38,10 +38,11 @@ def get_single_image_name(directory_path):
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(static_image_mode=True, max_num_faces=1)
-data = pd.read_csv('/home/chait/Desktop/proj/backend/data.csv')
+data = pd.read_csv('/home/chait/Desktop/proj/backend/data1.csv')
 
 osmf = YOLO('/home/chait/Desktop/proj/backend/best.pt', task="classify")
 calculus = YOLO('/home/chait/Desktop/proj/backend/calculus.pt', task="classify")
+calculus_inst = YOLO('/home/chait/Desktop/proj/backend/calculus-inst.pt', task="segment")
 gingivitis = YOLO('/home/chait/Desktop/proj/backend/gingivitis.pt', task="classify")
 phenotype = YOLO('/home/chait/Desktop/proj/backend/phenotype.pt', task="classify")
 
@@ -71,14 +72,18 @@ def opening(file: UploadFile = None):
                             int(face_landmarks.landmark[14].x * image.shape[1]),
                             int(face_landmarks.landmark[14].y * image.shape[0])
                         )
+                    cv2.circle(image, lower_lip_center, 2, (0, 255, 0), -1)
+                    cv2.circle(image, upper_lip_center, 2, (0, 255, 0), -1)
                     dist = np.linalg.norm(np.array(upper_lip_center) - np.array(lower_lip_center))
-                    index = (data["Pixels in 5 cm"] - distance_value.value).abs().idxmin()
-                    multiplication_factor = data.iloc[index]["Multiplication Factor 5cm"]
-                    actual_length = dist * multiplication_factor * 10
-                    text = f"Actual Distance: {actual_length}"
-                    cv2.putText(image, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-                    cv2.circle(image, lower_lip_center, 5, (0, 255, 0), -1)
-                    cv2.circle(image, upper_lip_center, 5, (0, 255, 0), -1)
+                    if dist > 2:
+                        index = (data["Lidar Distance"] - distance_value.value).abs().idxmin()
+                        multiplication_factor = data.iloc[index]["Multiplication Factor"]
+                        actual_length = dist * multiplication_factor * 10
+                        text = f"Actual Distance: {actual_length} cm"
+                        cv2.putText(image, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+                    else:
+                        text = "Mouth is Closed"
+                        cv2.putText(image, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         _, buffer = cv2.imencode('.jpg', image)
         encoded_image = base64.b64encode(buffer).decode('utf-8')
@@ -127,18 +132,26 @@ async def calculus_class(file: UploadFile = None):
         if file:
             with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
                 temp_file.write(file.file.read())
-            results = calculus.predict(source=temp_file.name, conf=0.5, save=True)
+            
             predict = calculus(temp_file.name)
             js = predict[0].tojson()
             predict_dict = json.loads(js)
             name = predict_dict[0]["name"]
             confidence = predict_dict[0]["confidence"]
+            predict[0].save('/home/chait/Desktop/proj/backend/calculus-class.jpg')
+            if name == "Calculus":
+                instance = calculus_inst(source=temp_file.name)
+                instance[0].save('/home/chait/Desktop/proj/backend/calculus-inst.jpg')
+                with open('/home/chait/Desktop/proj/backend/calculus-inst.jpg', "rb") as image_file:
+                    encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+                result = { 'status': 'success', 'generatedImage': encoded_image, 'class': name, 'conf': confidence}
+                os.remove('./calculus-inst.jpg')
+            else:
+                with open('/home/chait/Desktop/proj/backend/calculus-class.jpg', "rb") as image_file:
+                    encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
+                result = {'status': 'success', 'generatedImage': encoded_image, 'class': name, 'conf': confidence}
+            os.remove('/home/chait/Desktop/proj/backend/calculus-class.jpg')
             os.remove(temp_file.name)
-            image_name = get_single_image_name('/home/chait/Desktop/proj/backend/runs/classify/predict')
-            with open('/home/chait/Desktop/proj/backend/runs/classify/predict/'+image_name, "rb") as image_file:
-                encoded_image = base64.b64encode(image_file.read()).decode('utf-8')
-            result = {'status': 'success', 'generatedImage': encoded_image, 'class': name, 'conf': confidence}
-            shutil.rmtree('/home/chait/Desktop/proj/backend/runs')
             return JSONResponse(content=result)
         else:
             return{'status': 'error with file'}

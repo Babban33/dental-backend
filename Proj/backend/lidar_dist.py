@@ -15,6 +15,7 @@ def lidar_process(distance_value):
                     high = int(recv[3])
                     distance = low + high * 256
                     distance_value.value = distance
+                    print(distance)
 
     try:
         if not ser.is_open:
