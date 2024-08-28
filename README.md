@@ -14,5 +14,9 @@ To start the system, execute the `run.sh` file. This is the main entry point for
 
   For Detailed Documentation **[Click Here](https://github.com/Babban33/betic-backend)**
 
+### Installation guide
+
+For installation see: **[commands.md](./commands.md)**
+
   ---
 Made by **[Chaitanya Wankhede](https://github.com/Babban33)**
